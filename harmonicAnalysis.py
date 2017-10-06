@@ -133,7 +133,7 @@ class harmonicTrend():
 	DT3 = -6*np.pi*cos3*np.sin(6*np.pi*t) + 6*np.pi*sin3*np.cos(6*np.pi*t)
 
 
-	dtdx =  constant+DT1 + DT2 + DT3
+	dtdx =  constant-DT1 + DT2 + DT3
 	
 	fig, ax1 = plt.subplots()
 	ax1.plot(t, xt, 'b-')
