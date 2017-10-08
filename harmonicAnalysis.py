@@ -25,8 +25,8 @@ class environment(object):
         self.timeString = time.strftime("%Y%m%d_%H%M%S")
 
         # set dates
-        self.startYear = 2003;
-        self.endYear = 2003;
+        self.startYear = 2007;
+        self.endYear = 2007;
 
         # construct date objects
         startDate = ee.Date.fromYMD(self.startYear,1,1)
@@ -37,7 +37,9 @@ class environment(object):
 	MYD = ee.ImageCollection("MODIS/006/MYD13Q1")
 
         # set location 
-        self.location = ee.Geometry.Polygon([[[103.294,17.923],[103.294,17.923],[106.453,17.923],[106.453,20.469],[103.2941,20.469],[103.294,17.923]]])
+        self.location = ee.Geometry.Polygon([[[105.532,19.059],[105.606,19.058],[105.605,19.108],[105.530,19.110],[105.532,19.059]]])
+
+	#ee.Geometry.Polygon([[[103.294,17.923],[103.294,17.923],[106.453,17.923],[106.453,20.469],[103.2941,20.469],[103.294,17.923]]])
  
 
 	mod13 = ee.ImageCollection(MOD.merge(MYD)).filterDate(startDate,endDate);
@@ -104,7 +106,7 @@ class harmonicTrend():
 	start = 33 #*2*np.pi
 	stop =  34 #*2*np.pi
 	t = np.arange(start, stop, 0.005)  
-	i = 20
+	i = 50
 	cos1 = ee.Array(raw_list.get('cos_0')).getInfo()[i]
 	cos2 = ee.Array(raw_list.get('cos_1')).getInfo()[i]
 	cos3 = ee.Array(raw_list.get('cos_2')).getInfo()[i]
@@ -126,14 +128,16 @@ class harmonicTrend():
 	xt3 = cos3*np.cos(2*np.pi*w*t) + sin3*np.sin(2*np.pi*w*t)
 	
 	
-	xt =  constant*t +xt1+xt2+xt3
+	xt =  constant +xt1+xt2+xt3
 	
-	DT1 = -2*np.pi*cos1*np.sin(2*np.pi*t) + 2*np.pi*sin1*np.cos(2*np.pi*t)
-	DT2 = -4*np.pi*cos2*np.sin(4*np.pi*t) + 4*np.pi*sin2*np.cos(4*np.pi*t)
-	DT3 = -6*np.pi*cos3*np.sin(6*np.pi*t) + 6*np.pi*sin3*np.cos(6*np.pi*t)
+	DT1 = 2*np.pi*cos1*np.sin(2*np.pi*t) + 2*np.pi*sin1*np.cos(2*np.pi*t)
+	DT2 = 4*np.pi*cos2*np.sin(4*np.pi*t) + 4*np.pi*sin2*np.cos(4*np.pi*t)
+	DT3 = 6*np.pi*cos3*np.sin(6*np.pi*t) + 6*np.pi*sin3*np.cos(6*np.pi*t)
 
 
-	dtdx =  constant-DT1 + DT2 + DT3
+	#dtdx = constant - DT1 - DT2 - DT3
+	dtdx = constant-2*np.pi*cos1*np.sin(2*np.pi*t) + 2*np.pi*sin1*np.cos(2*np.pi*t) - 4*np.pi*cos2*np.sin(4*np.pi*t) + 4*np.pi*sin2*np.cos(4*np.pi*t) -6*np.pi*cos3*np.sin(6*np.pi*t) + 6*np.pi*sin3*np.cos(6*np.pi*t)
+	
 	
 	fig, ax1 = plt.subplots()
 	ax1.plot(t, xt, 'b-')
@@ -148,11 +152,11 @@ class harmonicTrend():
 	def F(t):
 	    #y = np.sin(np.pi*t)
 	    #return np.power(y,2) - 1 + np.power(((b1+2*np.pi*y*(12*b6*np.power(y,2)-4*b5-y-b2+2*b5-9*b6)) / (2*np.pi*(b3-4*b4*y +3*b7*(1-4*np.power(y,2))))),2)
-	    return constant-2*np.pi*cos1*np.sin(2*np.pi*t) + 2*np.pi*sin1*np.cos(2*np.pi*t)  - 4*np.pi*cos2*np.sin(4*np.pi*t) + 4*np.pi*sin2*np.cos(4*np.pi*t) -6*np.pi*cos3*np.sin(6*np.pi*t) + 6*np.pi*sin3*np.cos(6*np.pi*t)
-
+	    return constant-2*np.pi*cos1*np.sin(2*np.pi*t) + 2*np.pi*sin1*np.cos(2*np.pi*t) - 4*np.pi*cos2*np.sin(4*np.pi*t) + 4*np.pi*sin2*np.cos(4*np.pi*t) -6*np.pi*cos3*np.sin(6*np.pi*t) + 6*np.pi*sin3*np.cos(6*np.pi*t)
+					   #-2*np.pi*cos1*np.sin(2*np.pi*t) + 2*np.pi*sin1*np.cos(2*np.pi*t) - 4*np.pi*cos2*np.sin(4*np.pi*t) + 4*np.pi*sin2*np.cos(4*np.pi*t  -6*np.pi*cos3*np.sin(6*np.pi*t) + 6*np.pi*sin3*np.cos(6*np.pi*t)
 	#"""
 	intersections = []
-	myRange = np.arange(start, stop, 0.1)    
+	myRange = np.arange(start, stop, 0.05)    
 	for i in myRange:
 	    try:
 		sol = newton_krylov(F, i,  verbose=1)
