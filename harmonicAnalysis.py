@@ -13,6 +13,8 @@ from pylab import *
 from scipy.optimize import newton_krylov
 import numpy as np
 import matplotlib.pyplot as plt
+from osgeo import gdal
+from osgeo import osr
 
 class environment(object):
     
@@ -37,10 +39,10 @@ class environment(object):
 	MYD = ee.ImageCollection("MODIS/006/MYD13Q1")
 
         # set location 
-        self.location = ee.Geometry.Polygon([[[105.532,19.059],[105.606,19.058],[105.605,19.108],[105.530,19.110],[105.532,19.059]]])
+        #self.location = ee.Geometry.Polygon([[[105.294,17.923],[105.294,17.923],[106.453,17.923],[106.453,19.469],[105.2941,19.469],[105.294,17.923]]])
 
-	#ee.Geometry.Polygon([[[103.294,17.923],[103.294,17.923],[106.453,17.923],[106.453,20.469],[103.2941,20.469],[103.294,17.923]]])
- 
+	#self.location = ee.Geometry.Polygon([[[103.294,17.923],[103.294,17.923],[106.453,17.923],[106.453,20.469],[103.2941,20.469],[103.294,17.923]]])
+	self.location = ee.Geometry.Polygon([[[105.294,18.923],[105.294,18.923],[105.753,18.923],[105.753,19.469],[105.2941,19.469],[105.294,18.923]]])
 
 	mod13 = ee.ImageCollection(MOD.merge(MYD)).filterDate(startDate,endDate);
 	
@@ -57,6 +59,7 @@ class environment(object):
 
         # pixel size
         self.pixSize = 500
+	self.scale = 4000
         
         # user ID
         self.userID = "users/servirmekong/temp/"
@@ -93,100 +96,80 @@ class harmonicTrend():
 
 	## Filter to the area of interest, mask clouds, add variables.
 	harmonicLandsat = EVI.map(self.addConstant).map(self.addTime).map(self.addHarmonics);
-
 	
 	## The output of the regression reduction is a 4x1 array image.
 	harmonicTrend = harmonicLandsat.select(self.independents.add(self.env.dependent)).reduce(ee.Reducer.linearRegression(self.independents.length(), 1))
 
 	## Turn the array image into a multi-band image of coefficients.
-	harmonicTrendCoefficients = harmonicTrend.select('coefficients').arrayProject([0]).arrayFlatten([self.independents]).clip(self.env.location)
+	harmonicTrendCoefficients = harmonicTrend.select('coefficients').arrayProject([0]).arrayFlatten([self.independents])
+	
+	# get the lat lon and add the ndvi
+	latlon = ee.Image.pixelLonLat().addBands(harmonicTrendCoefficients).unmask(-9999)
+				
 	#print harmonicTrendCoefficients
-	raw_list = harmonicTrendCoefficients.reduceRegion(reducer=ee.Reducer.toList(),geometry=self.env.location,maxPixels=5e9,scale=500);
+	latlon = latlon.reduceRegion(reducer=ee.Reducer.toList(),geometry=self.env.location,maxPixels=5e9,scale=self.env.scale);
+			
+	# get data into three different arrays
+	cos_0 = np.array((ee.Array(latlon.get("cos_0")).getInfo()))
+	cos_1 = np.array((ee.Array(latlon.get("cos_1")).getInfo()))
+	cos_2 = np.array((ee.Array(latlon.get("cos_2")).getInfo()))
+	sin_0 = np.array((ee.Array(latlon.get("sin_0")).getInfo()))
+	sin_1 = np.array((ee.Array(latlon.get("sin_1")).getInfo()))
+	sin_2 = np.array((ee.Array(latlon.get("sin_2")).getInfo()))
+	constants =  np.array((ee.Array(latlon.get('constant')).getInfo()))	
 	
-	start = 33 #*2*np.pi
-	stop =  34 #*2*np.pi
-	t = np.arange(start, stop, 0.005)  
-	i = 50
-	cos1 = ee.Array(raw_list.get('cos_0')).getInfo()[i]
-	cos2 = ee.Array(raw_list.get('cos_1')).getInfo()[i]
-	cos3 = ee.Array(raw_list.get('cos_2')).getInfo()[i]
-
-	sin1 = ee.Array(raw_list.get('sin_0')).getInfo()[i]
-	sin2 = ee.Array(raw_list.get('sin_1')).getInfo()[i]
-	sin3 = ee.Array(raw_list.get('sin_2')).getInfo()[i]
+	lats = np.array((ee.Array(latlon.get("latitude")).getInfo()))
+	lons = np.array((ee.Array(latlon.get("longitude")).getInfo()))
+	 
+	# get the unique coordinates
+	self.uniqueLats = np.unique(lats)
+	self.uniqueLons = np.unique(lons)
+	 
+	# get number of columns and rows from coordinates
+	self.ncols = len(self.uniqueLons)    
+	self.nrows = len(self.uniqueLats)
+	 
+	# determine pixelsizes
+	self.ys = self.uniqueLats[1] - self.uniqueLats[0] 
+	self.xs = self.uniqueLons[1] - self.uniqueLons[0]
+	 
+	# create an array with dimensions of image
+	arr = np.zeros([self.nrows, self.ncols], np.float32) #-9999
 	
-	constant = ee.Array(raw_list.get('constant')).getInfo()[i] / (2*np.pi)
-	print constant
-
-	#print len(cos1),len(cos2), len(cos3), len(sin1),len(sin2), len(sin3), len(constant)
+	# start and end date are calculate from 1970 * 2* pi
+	start = int(self.env.startYear - 1970)
+	stop =  int(self.env.endYear - 1970)+1
 	
-	w = 1                # number of cycles
-	xt1 = cos1*np.cos(2*np.pi*w*t) + sin1*np.sin(2*np.pi*w*t)
-	w = 2                # number of cycles
-	xt2 = cos2*np.cos(2*np.pi*w*t) + sin2*np.sin(2*np.pi*w*t) 
-	w = 3                # number of cycles
-	xt3 = cos3*np.cos(2*np.pi*w*t) + sin3*np.sin(2*np.pi*w*t)
+	constants =  np.array(constants) / (2*np.pi)
 	
+	values = self.calculateDates(cos_0,cos_1,cos_2,sin_0,sin_1,sin_2,constants,start,stop)
+		
+	# fill the array with values
+	for j in range(0,1,1):
+	    arr = np.zeros([self.nrows,self.ncols])
+	    counter =0
+	    for y in range(0,len(arr),1):
+		for x in range(0,len(arr[0]),1):
+		    #try:
+		    if lats[counter] == self.uniqueLats[y] and lons[counter] == self.uniqueLons[x] and counter < len(lats)-1:
+			counter+=1
+			val = unique(np.round(values[counter],3))
+			print len(val)
+			if len(val) == 6:
+			    arr[len(self.uniqueLats)-1-y,x] = int((val[counter][j]-start)*365) # we start from lower left corner
+		   # except:
+			#pass
+	    
+	    self.exportToGeoTiff(arr,j)
 	
-	xt =  constant +xt1+xt2+xt3
-	
-	DT1 = 2*np.pi*cos1*np.sin(2*np.pi*t) + 2*np.pi*sin1*np.cos(2*np.pi*t)
-	DT2 = 4*np.pi*cos2*np.sin(4*np.pi*t) + 4*np.pi*sin2*np.cos(4*np.pi*t)
-	DT3 = 6*np.pi*cos3*np.sin(6*np.pi*t) + 6*np.pi*sin3*np.cos(6*np.pi*t)
-
-
-	#dtdx = constant - DT1 - DT2 - DT3
-	dtdx = constant-2*np.pi*cos1*np.sin(2*np.pi*t) + 2*np.pi*sin1*np.cos(2*np.pi*t) - 4*np.pi*cos2*np.sin(4*np.pi*t) + 4*np.pi*sin2*np.cos(4*np.pi*t) -6*np.pi*cos3*np.sin(6*np.pi*t) + 6*np.pi*sin3*np.cos(6*np.pi*t)
-	
-	
-	fig, ax1 = plt.subplots()
-	ax1.plot(t, xt, 'b-')
-
-	ax2 = ax1.twinx()
-	s2 = np.sin(2 * np.pi * t)
-	ax2.plot(t, dtdx, 'r-')
-
-	fig.tight_layout()
-	plt.axhline(y=0, color='r', linestyle='-')
-
-	def F(t):
-	    #y = np.sin(np.pi*t)
-	    #return np.power(y,2) - 1 + np.power(((b1+2*np.pi*y*(12*b6*np.power(y,2)-4*b5-y-b2+2*b5-9*b6)) / (2*np.pi*(b3-4*b4*y +3*b7*(1-4*np.power(y,2))))),2)
-	    return constant-2*np.pi*cos1*np.sin(2*np.pi*t) + 2*np.pi*sin1*np.cos(2*np.pi*t) - 4*np.pi*cos2*np.sin(4*np.pi*t) + 4*np.pi*sin2*np.cos(4*np.pi*t) -6*np.pi*cos3*np.sin(6*np.pi*t) + 6*np.pi*sin3*np.cos(6*np.pi*t)
-					   #-2*np.pi*cos1*np.sin(2*np.pi*t) + 2*np.pi*sin1*np.cos(2*np.pi*t) - 4*np.pi*cos2*np.sin(4*np.pi*t) + 4*np.pi*sin2*np.cos(4*np.pi*t  -6*np.pi*cos3*np.sin(6*np.pi*t) + 6*np.pi*sin3*np.cos(6*np.pi*t)
-	#"""
-	intersections = []
-	myRange = np.arange(start, stop, 0.05)    
-	for i in myRange:
-	    try:
-		sol = newton_krylov(F, i,  verbose=1)
-		if sol > start and sol < stop:
-		    #print sol
-		    plt.axvline(x=sol, color='k', linestyle='--')
-		    intersections.append(float(sol))  
-		    #print sol	
-	    except:
-		pass
-	#"""		
+	# in case you want to plot the image
+	import matplotlib.pyplot as plt        
+	plt.imshow(arr,  vmin=0, vmax=365)
 	plt.show()
+	return arr 
 	
-	
-	#df = DataFrame(band1, columns = pts[0])
-	#print df
-	#outputName = "Harmonic_trend_" + str(self.env.startYear)
-	#self.ExportToAsset(harmonicTrendCoefficients,outputName)         
-	
-	##fittedHarmonic = harmonicLandsat.map(self.fitLandsat)
-	## Compute the number of observations in each pixel.
-	##n = fittedHarmonic.select("EVI").count();
-  
-	## There are n-p degrees of freedom
-	##dof = n.subtract(self.independents.length());
 
 
-	
-	#print self.harmonicTrendCoefficients
-	
     def multiply(self,img):
 	""" apply scaling factor """ 	
 	image = img.multiply(0.0001);
@@ -235,6 +218,82 @@ class harmonicTrend():
 	image = img.select(self.independents).multiply(self.harmonicTrendCoefficients).reduce('sum').rename(['fitted'])
 	
 	return img.addBands(image)
+
+
+    def calculateDates(self,cos_0,cos_1,cos_2,sin_0,sin_1,sin_2,constants,start,stop):
+	""" Calculate the min and max using non-linear solver. """
+	
+	# empty list to store results
+	values = []
+	
+	# range of values for non-linear solver
+	myRange = np.arange(start, stop, 0.1)  
+	
+	counter = 0
+	for x in range(0,len(cos_0)-1,1):
+	    counter +=1
+	    if counter > 100:
+		print x, "of .. ", len(cos_0)
+		counter = 0
+	    # empty list with interection points
+	    intersections = []
+	    
+	    for i in myRange:
+		try:
+		    # get all values
+		    cos1 = cos_0[x]
+		    cos2 = cos_1[x]
+		    cos3 = cos_2[x]
+
+		    sin1 = sin_0[x]
+		    sin2 = sin_1[x]
+		    sin3 = sin_2[x]
+		    constant = constants[x]
+		    
+		    # function to be solved		    
+		    def F(t):
+			return constant-2*np.pi*cos1*np.sin(2*np.pi*t) + 2*np.pi*sin1*np.cos(2*np.pi*t) - 4*np.pi*cos2*np.sin(4*np.pi*t) + 4*np.pi*sin2*np.cos(4*np.pi*t) -6*np.pi*cos3*np.sin(6*np.pi*t) + 6*np.pi*sin3*np.cos(6*np.pi*t)
+			
+		    # the non-linear solver
+		    sol = newton_krylov(F, i,  verbose=0)
+		    
+		    # if the results is within the expected boundaries
+		    if sol > start and sol < stop:
+			intersections.append(float(sol))  
+			
+		
+		except:
+		    pass
+	    values.append(intersections)
+	
+	return values
+
+    def exportToGeoTiff(self,arr,number):
+	""" export the result to a geotif. """
+
+	#SetGeoTransform((originX, pixelWidth, 0, originY, 0, pixelHeight))
+	transform = (np.min(self.uniqueLons),self.xs,0,np.max(self.uniqueLats),0,-self.ys)
+
+	# set the coordinate system
+	target = osr.SpatialReference()
+	target.ImportFromEPSG(4326)
+
+	# set driver
+	driver = gdal.GetDriverByName('GTiff')
+
+	timestring = time.strftime("%Y%m%d_%H%M%S")
+	outputDataset = driver.Create(r"d:\mydata/" + timestring + str(number) + "test.tif", self.ncols,self.nrows, 1,gdal.GDT_Float32)
+	print "exporting .. " + str("d:\mydata/" + timestring + "test.tif")
+
+	# add some metadata
+	#outputDataset.SetMetadata( {'time': str(timestring), 'someotherInfo': 'lala'} )
+
+	outputDataset.SetGeoTransform(transform)
+	outputDataset.SetProjection(target.ExportToWkt())
+	outputDataset.GetRasterBand(1).WriteArray(arr)
+	outputDataset.GetRasterBand(1).SetNoDataValue(-9999)
+	outputDataset = None
+
       
     def ExportToAsset(self,img,assetName):  
         """export to asset """
@@ -249,4 +308,5 @@ class harmonicTrend():
         
         # start task
         task_ordered.start()
-harmonicTrend().runModel()
+
+vals = harmonicTrend().runModel()
