@@ -59,7 +59,7 @@ class environment(object):
 
         # pixel size
         self.pixSize = 500
-	self.scale = 4000
+	self.scale = 2000
         
         # user ID
         self.userID = "users/servirmekong/temp/"
@@ -150,15 +150,14 @@ class harmonicTrend():
 	    counter =0
 	    for y in range(0,len(arr),1):
 		for x in range(0,len(arr[0]),1):
-		    #try:
-		    if lats[counter] == self.uniqueLats[y] and lons[counter] == self.uniqueLons[x] and counter < len(lats)-1:
-			counter+=1
-			val = unique(np.round(values[counter],3))
-			print len(val)
-			if len(val) == 6:
-			    arr[len(self.uniqueLats)-1-y,x] = int((val[counter][j]-start)*365) # we start from lower left corner
-		   # except:
-			#pass
+		    try:
+			if lats[counter] == self.uniqueLats[y] and lons[counter] == self.uniqueLons[x] and counter < len(lats)-1:
+			    counter+=1
+			    val = unique(np.round(values[counter],3))
+			    if len(val) == 6:
+				arr[len(self.uniqueLats)-1-y,x] = int((val[j]-start)*365) # we start from lower left corner
+		    except:
+			pass
 	    
 	    self.exportToGeoTiff(arr,j)
 	
