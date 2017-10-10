@@ -42,7 +42,7 @@ class environment(object):
         #self.location = ee.Geometry.Polygon([[[105.294,17.923],[105.294,17.923],[106.453,17.923],[106.453,19.469],[105.2941,19.469],[105.294,17.923]]])
 
 	#self.location = ee.Geometry.Polygon([[[103.294,17.923],[103.294,17.923],[106.453,17.923],[106.453,20.469],[103.2941,20.469],[103.294,17.923]]])
-	self.location = ee.Geometry.Polygon([[[105.294,18.923],[105.294,18.923],[105.753,18.923],[105.753,19.469],[105.2941,19.469],[105.294,18.923]]])
+	self.location = ee.Geometry.Polygon([[[103.952,18.646],[106.875,18.604],[107.072,21.943],[103.623,22.187],[103.952,18.646]]])
 
 	mod13 = ee.ImageCollection(MOD.merge(MYD)).filterDate(startDate,endDate);
 	
@@ -59,7 +59,7 @@ class environment(object):
 
         # pixel size
         self.pixSize = 500
-	self.scale = 2000
+	self.scale = 500
         
         # user ID
         self.userID = "users/servirmekong/temp/"
@@ -145,7 +145,7 @@ class harmonicTrend():
 	values = self.calculateDates(cos_0,cos_1,cos_2,sin_0,sin_1,sin_2,constants,start,stop)
 		
 	# fill the array with values
-	for j in range(0,1,1):
+	for j in range(0,5,1):
 	    arr = np.zeros([self.nrows,self.ncols])
 	    counter =0
 	    for y in range(0,len(arr),1):
@@ -159,7 +159,7 @@ class harmonicTrend():
 		    except:
 			pass
 	    
-	    self.exportToGeoTiff(arr,j)
+	    self.exportToGeoTiff(arr,j+1)
 	
 	# in case you want to plot the image
 	import matplotlib.pyplot as plt        
@@ -231,7 +231,7 @@ class harmonicTrend():
 	counter = 0
 	for x in range(0,len(cos_0)-1,1):
 	    counter +=1
-	    if counter > 100:
+	    if counter > 1000:
 		print x, "of .. ", len(cos_0)
 		counter = 0
 	    # empty list with interection points
@@ -281,7 +281,7 @@ class harmonicTrend():
 	driver = gdal.GetDriverByName('GTiff')
 
 	timestring = time.strftime("%Y%m%d_%H%M%S")
-	outputDataset = driver.Create(r"d:\mydata/" + timestring + str(number) + "test.tif", self.ncols,self.nrows, 1,gdal.GDT_Float32)
+	outputDataset = driver.Create(r"d:\mydata/" + timestring + "band_"+ str(number) + ".tif", self.ncols,self.nrows, 1,gdal.GDT_Float32)
 	print "exporting .. " + str("d:\mydata/" + timestring + "test.tif")
 
 	# add some metadata
