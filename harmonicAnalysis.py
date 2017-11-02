@@ -27,8 +27,8 @@ class environment(object):
         self.timeString = time.strftime("%Y%m%d_%H%M%S")
 
         # set dates
-        self.startYear = 2004;
-        self.endYear = 2004;
+        self.startYear = 2005;
+        self.endYear = 2005;
 
         # construct date objects
         startDate = ee.Date.fromYMD(self.startYear,1,1)
@@ -73,6 +73,8 @@ class environment(object):
         
         # user ID
         self.userID = "users/servirmekong/temp/"
+	
+	self.exportName = ""
 
 
 	# Make a list of harmonic frequencies to model. These also serve as band name suffixes.
@@ -91,22 +93,26 @@ class harmonicTrend():
 	# get the environment
         self.env = environment()
     
-    def runModel(self,coord,row,column):
+    def runModel(self,coord,row,col):
 		
 	print 'getting data'
 	self.EVI = self.env.mod13.map(self.scaling);
 	self.env.location = coord.bounds();
 	
+	
+	self.env.exportName = "_2_" +  str(self.env.startYear) + "_" + str(row) + "_" + str(col)
 	cycles = 2
 	intersectionPoints, eviValues, lats, lons = self.applyHarmonics(cycles)
-
+	
+	
+	
 	self.exportToDrive(intersectionPoints,"days",cycles,lats,lons)	
 	self.exportToDrive(eviValues,"EVI",cycles,lats,lons)	
 	
 	cycles = 3
 	intersectionPoints, eviValues, lats, lons  = self.applyHarmonics(cycles)
 	
-	self.exportName = self.env.startyear + "_" + str(row) + "_" + str(col)
+	self.env.exportName = "_3_" +  str(self.env.startYear) + "_" + str(row) + "_" + str(col)	
 	
 	self.exportToDrive(intersectionPoints,"doy",cycles,lats,lons)		
 	self.exportToDrive(eviValues,"EVI",cycles,lats,lons)	
@@ -396,8 +402,8 @@ class harmonicTrend():
 	driver = gdal.GetDriverByName('GTiff')
 
 	timestring = time.strftime("%Y%m%d_%H%M%S")
-	outputDataset = driver.Create(r"d:\ate/maps/" + str(name) + self.exportName ".tif", self.ncols,self.nrows, 1,gdal.GDT_Float32)
-	print "exporting .. " + str("d:\ate/maps/" + str(name) + self.exportName  + ".tif")
+	outputDataset = driver.Create(r"d:\ate/maps/" + str(name) + self.env.exportName + "_" + str(number) + ".tif", self.ncols,self.nrows, 1,gdal.GDT_Float32)
+	print "exporting .. " + str("d:\ate/maps/" + str(name) + self.env.exportName + "_" + str(number) +  ".tif")
 
 	# add some metadata
 	#outputDataset.SetMetadata( {'time': str(timestring), 'someotherInfo': 'lala'} )
@@ -480,7 +486,7 @@ for i in range(0,10,1):
 	y3 = y2
 	y4 = y1
 	geom =  ee.Geometry.Polygon( [[x1, y1], [x2, y2], [x3, y3], [x4, y4]])
-	try:
-	    vals = harmonicTrend().runModel(geom,i,j)
-	except:
-	    pass
+	#try:
+	vals = harmonicTrend().runModel(geom,i,j)
+	#except:
+	#    pass
