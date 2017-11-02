@@ -27,8 +27,8 @@ class environment(object):
         self.timeString = time.strftime("%Y%m%d_%H%M%S")
 
         # set dates
-        self.startYear = 2005;
-        self.endYear = 2005;
+        self.startYear = 2004;
+        self.endYear = 2004;
 
         # construct date objects
         startDate = ee.Date.fromYMD(self.startYear,1,1)
@@ -91,39 +91,34 @@ class harmonicTrend():
 	# get the environment
         self.env = environment()
     
-    def runModel(self):
+    def runModel(self,coord,row,column):
 		
 	print 'getting data'
 	self.EVI = self.env.mod13.map(self.scaling);
+	self.env.location = coord.bounds();
 	
 	cycles = 2
 	intersectionPoints, eviValues, lats, lons = self.applyHarmonics(cycles)
-	
+
 	self.exportToDrive(intersectionPoints,"days",cycles,lats,lons)	
 	self.exportToDrive(eviValues,"EVI",cycles,lats,lons)	
 	
 	cycles = 3
 	intersectionPoints, eviValues, lats, lons  = self.applyHarmonics(cycles)
 	
-	self.exportToDrive(intersectionPoints,"days",cycles,lats,lons)		
+	self.exportName = self.env.startyear + "_" + str(row) + "_" + str(col)
+	
+	self.exportToDrive(intersectionPoints,"doy",cycles,lats,lons)		
 	self.exportToDrive(eviValues,"EVI",cycles,lats,lons)	
 	
-	#constants =  np.array(constants) # / (2*np.pi)
+	#return intersectionPoints
 
-	return intersectionPoints
-	# in case you want to plot the image
-	#import matplotlib.pyplot as plt        
-	#plt.imshow(arr,  vmin=0, vmax=365)
-	#plt.show()
-	#return arr 
-	
 
     def applyHarmonics(self,cycles):
 	
 	self.harmonicFrequencies = ee.List.sequence(1, cycles);
 	
 	self.env.harmonics = cycles
-      
       
         # Construct lists of names for the harmonic terms.
 	self.cosNames = ee.List(self.getNames('cos_', cycles));
@@ -147,13 +142,13 @@ class harmonicTrend():
 	
 	# get the lat lon and add the ndvi
 	latlon = ee.Image.pixelLonLat().addBands(harmonicTrendCoefficients).addBands(rsq).unmask(-9999)
-				
+	
 	#print harmonicTrendCoefficients
 	latlon = latlon.reduceRegion(reducer=ee.Reducer.toList(),geometry=self.env.location,maxPixels=5e9,scale=self.env.scale);
 		
 	# get the number of cycles
 	rsqdata =  np.array((ee.Array(latlon.get('cycles')).getInfo()))
-	
+
 	print 'data to numpy'		
 	# get data into three different arrays
 	cos_0 = np.array((ee.Array(latlon.get("cos_0")).getInfo()))[rsqdata == cycles]
@@ -161,6 +156,8 @@ class harmonicTrend():
 	
 	sin_0 = np.array((ee.Array(latlon.get("sin_0")).getInfo()))[rsqdata == cycles]
 	sin_1 = np.array((ee.Array(latlon.get("sin_1")).getInfo()))[rsqdata == cycles]
+	
+	print [rsqdata == cycles]
 	
 	constants =  np.array((ee.Array(latlon.get('constant')).getInfo()))[rsqdata == cycles]	
 	
@@ -171,6 +168,8 @@ class harmonicTrend():
 	# get lat lon
 	self.lats = np.array((ee.Array(latlon.get("latitude")).getInfo()))
 	self.lons = np.array((ee.Array(latlon.get("longitude")).getInfo()))
+	
+	print np.array((ee.Array(latlon.get("latitude")).getInfo()))
 	 	 
 	# get the unique coordinates
 	self.uniqueLats = np.unique(self.lats)
@@ -195,6 +194,7 @@ class harmonicTrend():
 	
 	lats = self.lats[rsqdata == cycles]
 	lons = self.lons[rsqdata == cycles]
+	print lats
 	
 	if cycles == 2:
 	    print 'calc inflectionpoints', cycles
@@ -272,8 +272,8 @@ class harmonicTrend():
 
 	for x in range(0,len(cos_0)-1,1):
 	    counter +=1
-	    if counter > 1000:
-		print (float(x)/float(len(cos_0)))*100.0 , " .. %\n ", 
+	    if counter > 2000:
+		print round((float(x)/float(len(cos_0)))*100.0) , " .. %\n ", 
 		counter = 0
 	    
 	    #empty list with interection points
@@ -299,7 +299,7 @@ class harmonicTrend():
 			
 		try:
 		    # the non-linear solver
-		    sol = float(newton_krylov(derivative,i,  verbose=0,maxiter=100))
+		    sol = float(newton_krylov(derivative,i)) #,  verbose=0,maxiter=100))
 			    
 		    # if the results is within the expected boundaries
 		    if sol > self.start and sol < self.stop:
@@ -308,6 +308,7 @@ class harmonicTrend():
 			
 		
 		except:
+		    #print "error"
 		    pass
 		    
 	    dayValues.append(intersections)
@@ -330,7 +331,7 @@ class harmonicTrend():
 	for x in range(0,len(cos_0)-1,1):
 	    counter +=1
 	    if counter > 1000:
-		print (float(x)/float(len(cos_0)))*100.0 , " .. %\n ", 
+		print round((float(x)/float(len(cos_0)))*100.0) , " .. %\n ", 
 		counter = 0
 	    
 	    #empty list with interection points
@@ -338,8 +339,6 @@ class harmonicTrend():
 	    evis = []
 	    
 	    for i in myRange:
-#		try:
-	    # get all values
 		cos1 = cos_0[x]
 		cos2 = cos_1[x]
 		cos3 = cos_2[x]
@@ -362,8 +361,7 @@ class harmonicTrend():
 		    # the non-linear solver
 		    sol = float(newton_krylov(derivative,i,  verbose=0,maxiter=100))
 	    
-		    #print sol
-			    
+		    
 		    # if the results is within the expected boundaries
 		    if sol > self.start and sol < self.stop:
 			intersections.append(sol)  
@@ -371,6 +369,7 @@ class harmonicTrend():
 			
 		
 		except:
+		    #print "error"
 		    pass
 		    
 	    #print intersections
@@ -397,8 +396,8 @@ class harmonicTrend():
 	driver = gdal.GetDriverByName('GTiff')
 
 	timestring = time.strftime("%Y%m%d_%H%M%S")
-	outputDataset = driver.Create(r"d:\mydata/maps/" + str(name) + timestring + "band_"+ str(number) + ".tif", self.ncols,self.nrows, 1,gdal.GDT_Float32)
-	print "exporting .. " + str("d:\mydata/" + timestring + "test.tif")
+	outputDataset = driver.Create(r"d:\ate/maps/" + str(name) + self.exportName ".tif", self.ncols,self.nrows, 1,gdal.GDT_Float32)
+	print "exporting .. " + str("d:\ate/maps/" + str(name) + self.exportName  + ".tif")
 
 	# add some metadata
 	#outputDataset.SetMetadata( {'time': str(timestring), 'someotherInfo': 'lala'} )
@@ -445,13 +444,43 @@ class harmonicTrend():
         
         outputName = self.env.userID + str(nr) + "_" + str(self.env.timeString) + assetName
         logging.info('export image to asset: ' + str(outputName))   
-	
-	#img = img.multiply(10000).int16()
-
                     
         task_ordered = ee.batch.Export.image.toAsset(image=ee.Image(img), description=str(self.env.timeString)+"_exportJob", assetId=outputName,region=self.env.location['coordinates'], maxPixels=1e13,scale=self.env.pixSize)
         
         # start task
         task_ordered.start()
 
-vals = harmonicTrend().runModel()
+
+import ee
+ee.Initialize()
+
+xmin = 91.979254
+xmax = 114.664186
+ymin = 5.429208
+ymax = 28.728774
+
+n = 10
+xs = (xmax - xmin) / n
+ys = (ymax - ymin) / n
+
+for i in range(0,10,1):
+    for j in range(0,10,1):
+	h = i
+	x1 = xmin + h * xs
+	x2 = x1
+
+	x3 = xmin + (h+1) * xs
+	x4 = x3
+	
+	print i
+
+	v = j
+	y1 = ymin + (v*ys)
+	y2 = ymin + ys + (v*ys)
+	y3 = y2
+	y4 = y1
+	geom =  ee.Geometry.Polygon( [[x1, y1], [x2, y2], [x3, y3], [x4, y4]])
+	try:
+	    vals = harmonicTrend().runModel(geom,i,j)
+	except:
+	    pass
