@@ -27,8 +27,9 @@ class environment(object):
         self.timeString = time.strftime("%Y%m%d_%H%M%S")
 
         # set dates
-        self.startYear = 2005;
-        self.endYear = 2005;
+        self.startYear = 2015;
+        self.endYear = 2015;
+        print self.startYear 
 
         # construct date objects
         startDate = ee.Date.fromYMD(self.startYear,1,1)
@@ -365,7 +366,7 @@ class harmonicTrend():
 			
 		try:
 		    # the non-linear solver
-		    sol = float(newton_krylov(derivative,i,  verbose=0,maxiter=100))
+		    sol = float(newton_krylov(derivative,i))
 	    
 		    
 		    # if the results is within the expected boundaries
@@ -486,7 +487,7 @@ for i in range(0,10,1):
 	y3 = y2
 	y4 = y1
 	geom =  ee.Geometry.Polygon( [[x1, y1], [x2, y2], [x3, y3], [x4, y4]])
-	#try:
-	vals = harmonicTrend().runModel(geom,i,j)
-	#except:
-	#    pass
+	try:
+	    vals = harmonicTrend().runModel(geom,i,j)
+	except:
+	    pass
